@@ -1,4 +1,3 @@
-
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -6,16 +5,26 @@ const cors = require("cors");
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "https://giri-26.github.io",
+      "http://localhost:5173",
+    ],
+  })
+);
+
 app.use(express.json());
 
-// Connect to MongoDB
-mongoose
-  .connect("mongodb://127.0.0.1:27017/taskmanager")
-  .then(() => console.log("MongoDB connected successfully"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI;
 
-// Define Task Schema
+if (!MONGODB_URI) {
+  console.error("MONGODB_URI environment variable is missing.");
+  process.exit(1);
+}
+
+// Task Schema
 const TaskSchema = new mongoose.Schema(
   {
     title: {
@@ -32,7 +41,7 @@ const TaskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Create Task Model
+// Task Model
 const Task = mongoose.model("Task", TaskSchema);
 
 // GET: Fetch all tasks
@@ -41,14 +50,14 @@ app.get("/tasks", async (req, res) => {
     const tasks = await Task.find();
     res.json(tasks);
   } catch (err) {
-    console.error("Error fetching tasks:", err);
+    console.error(err);
     res.status(500).json({
       message: "Could not fetch tasks.",
     });
   }
 });
 
-// POST: Create a new task
+// POST: Create a task
 app.post("/tasks", async (req, res) => {
   try {
     const { title } = req.body;
@@ -59,12 +68,14 @@ app.post("/tasks", async (req, res) => {
       });
     }
 
-    const newTask = new Task({ title: title.trim() });
-    const savedTask = await newTask.save();
+    const newTask = new Task({
+      title: title.trim(),
+    });
 
+    const savedTask = await newTask.save();
     res.status(201).json(savedTask);
   } catch (err) {
-    console.error("Error creating task:", err);
+    console.error(err);
     res.status(400).json({
       message: "Could not create task.",
     });
@@ -76,7 +87,11 @@ app.patch("/tasks/:id", async (req, res) => {
   try {
     const { status } = req.body;
 
-    const allowedStatuses = ["Pending", "Ongoing", "Completed"];
+    const allowedStatuses = [
+      "Pending",
+      "Ongoing",
+      "Completed",
+    ];
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
@@ -98,7 +113,7 @@ app.patch("/tasks/:id", async (req, res) => {
 
     res.json(updatedTask);
   } catch (err) {
-    console.error("Error updating task:", err);
+    console.error(err);
     res.status(500).json({
       message: "Could not update task status.",
     });
@@ -118,18 +133,33 @@ app.delete("/tasks/:id", async (req, res) => {
       });
     }
 
-    res.json({ message: "Task deleted successfully." });
+    res.json({
+      message: "Task deleted successfully.",
+    });
   } catch (err) {
-    console.error("Error deleting task:", err);
+    console.error(err);
     res.status(500).json({
       message: "Could not delete task.",
     });
   }
 });
 
-// Start server
+// Start Server
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await mongoose.connect(MONGODB_URI);
+
+    console.log("MongoDB connected successfully");
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
